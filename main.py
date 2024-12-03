@@ -1,42 +1,44 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query
 from enum import Enum
 from duckduckgo_search import DDGS
-from fastapi.responses import JSONResponse
+from typing import Annotated
+
+
+app = FastAPI(
+   title="LLM Chat API",
+)
 
 class ModelEnum(str, Enum):
     gpt_4o_mini = 'gpt-4o-mini'
-    meta_llama = 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo'
-    mistralai = 'mistralai/Mixtral-8x7B-Instruct-v0.1'
-    claude_3 = 'claude-3-haiku-20240307'
+    meta_llama = 'meta-llama'
+    mistralai = 'mixtral'
+    claude_3 = 'claude-3'
 
-app = FastAPI(
-    title="Chat API",
-    description="API để thực hiện cuộc trò chuyện",
-    version="1.0.0",
-    openapi_tags=[
-        {"name": "chat", "description": "Thực hiện cuộc trò chuyện"}
-    ]
-)
-
-class ChatRequest(BaseModel):
-    query: str
-    model: ModelEnum
+MODEL_MAPPING = {
+   'gpt-4o-mini': 'gpt-4o-mini',
+   'meta-llama': 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+   'mixtral': 'mistralai/Mixtral-8x7B-Instruct-v0.1',
+   'claude-3': 'claude-3-haiku-20240307'
+}
 
 @app.post("/chat")
-async def chat(request: ChatRequest):
-    """
-    Thực hiện cuộc trò chuyện với mô hình được chọn
-
-    Args:
-        request (ChatRequest): Dữ liệu từ người dùng bao gồm câu hỏi và mô hình
-
-    Returns:
-        JSONResponse: Kết quả của cuộc trò chuyện
-    """
+async def chat(
+    query: str,
+    model: Annotated[ModelEnum, Query()] = ModelEnum.gpt_4o_mini
+):
     try:
-        results = DDGS().chat(request.query, model=request.model)
+        actual_model = MODEL_MAPPING[model.value]
+        print(actual_model) 
+        results = DDGS().chat(query, model=actual_model)
         return JSONResponse(content={"results": results})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing the request: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/models", tags=["chat"])
+async def get_models():
+   return {"models": list(ModelEnum)}
+
+if __name__ == "__main__":
+   import uvicorn
+   uvicorn.run(app, host="0.0.0.0", port=8000)
 
